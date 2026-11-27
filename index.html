@@ -213,7 +213,7 @@
             </div>
 
             <div>
-              <label for="selectGeminiVoice" class="block text-[11px] text-slate-500 mb-1">Gemini AI 원어민 목소리 (API 연결 시 자동 적용)</label>
+              <label for="selectGeminiVoice" class="block text-[11px] text-slate-500 mb-1">Gemini AI 원어민 목소리 (현재 응답 속도 최적화를 위해 비활성화됨 — 음성은 브라우저 기본 음성 사용)</label>
               <select id="selectGeminiVoice"
                 class="w-full px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
                 <option value="Kore">Kore (차분하고 명확한 여성 튜터)</option>
@@ -1222,7 +1222,7 @@
 
       function speakWithBrowserTTS(text) {
         if (!('speechSynthesis' in window)) {
-          showToast('이 화면에서는 브라우저 음성이 지원되지 않습니다. 상단 Gemini API를 연결하면 고음질 AI 음성으로 바로 들으실 수 있어요.');
+          showToast('이 화면에서는 브라우저 음성이 지원되지 않습니다.');
           autoRestartListening();
           return;
         }
@@ -1271,7 +1271,7 @@
             updateCallHeader();
             const errCode = ev && ev.error ? ev.error : '';
             if (errCode !== 'canceled' && errCode !== 'interrupted') {
-              showToast('브라우저 기본 음성이 차단되었습니다. 상단 Gemini API를 연결하시면 원어민 AI 음성으로 재생됩니다.');
+              showToast('브라우저 기본 음성이 차단되었습니다. 기기 설정에서 음성 재생 권한을 확인해 주세요.');
             }
           };
 
@@ -1282,7 +1282,7 @@
           // Watchdog: detect silent preview-environment block
           ttsWatchdogId = setTimeout(() => {
             if (!started && !window.speechSynthesis.speaking) {
-              showToast('현재 미리보기 창에서는 브라우저 기본 음성이 차단되어 있습니다. 상단 Gemini API 키를 연결하면 고음질 AI 음성으로 바로 재생됩니다!');
+              showToast('현재 미리보기 창에서는 브라우저 기본 음성이 차단되어 있습니다.');
             }
           }, 950);
         } catch (e) {
@@ -1303,18 +1303,8 @@
           }
         } catch (e) {}
 
-        if (state.apiKey) {
-          try {
-            state.isSpeaking = true;
-            updateCallHeader();
-            await speakWithGeminiTTS(text);
-            return;
-          } catch (err) {
-            state.isSpeaking = false;
-            updateCallHeader();
-            showToast(`Gemini AI 음성 호출 실패(${err.message}) — 브라우저 음성으로 전환합니다.`);
-          }
-        }
+        // Voice playback always uses the browser's built-in TTS (instant, no network
+        // round-trip) so replies are heard as soon as the text comes back from Gemini.
         speakWithBrowserTTS(text);
       }
 
@@ -1946,13 +1936,13 @@
           els.btnOpenApiModal.className = 'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100';
           els.apiStatusDot.className = 'w-2 h-2 rounded-full bg-emerald-500';
           els.apiStatusLabel.textContent = 'Gemini API 연결됨';
-          els.ttsEngineLabel.textContent = 'Gemini AI 고음질 원어민 음성 (AudioContext)';
+          els.ttsEngineLabel.textContent = '브라우저 기본 음성 (빠른 응답을 위해 사용 중)';
           els.ttsEngineLabel.className = 'text-emerald-700';
         } else {
           els.btnOpenApiModal.className = 'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100';
           els.apiStatusDot.className = 'w-2 h-2 rounded-full bg-amber-500';
           els.apiStatusLabel.textContent = '체험 모드';
-          els.ttsEngineLabel.textContent = '브라우저 기본 음성 (API 연결 시 AI 음성 자동 전환)';
+          els.ttsEngineLabel.textContent = '브라우저 기본 음성';
           els.ttsEngineLabel.className = 'text-amber-700';
         }
       }
