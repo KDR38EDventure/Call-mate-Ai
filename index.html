@@ -1484,7 +1484,10 @@
                 contents,
                 generationConfig: {
                   temperature: 0.75,
-                  responseMimeType: 'application/json'
+                  responseMimeType: 'application/json',
+                  // This is a short conversational reply, not a reasoning task —
+                  // skip the model's internal "thinking" pass to cut latency.
+                  thinkingConfig: { thinkingBudget: 0 }
                 }
               }),
               signal: controller.signal
