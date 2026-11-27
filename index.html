@@ -1144,6 +1144,7 @@
           if (currentAudioSource === source) currentAudioSource = null;
           state.isSpeaking = false;
           updateCallHeader();
+          autoRestartListening();
         };
         source.start(0);
       }
@@ -1152,25 +1153,37 @@
         const ttsModels = ['gemini-3.1-flash-tts-preview', 'gemini-2.5-flash-preview-tts'];
         let data = null;
         let lastStatus = '';
+        const TTS_TIMEOUT_MS = 12000;
         for (const ttsModel of ttsModels) {
           const url = `https://generativelanguage.googleapis.com/v1beta/models/${ttsModel}:generateContent?key=${encodeURIComponent(state.apiKey)}`;
-          const res = await fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              contents: [{ parts: [{ text: `Read the following English sentence aloud naturally as a friendly tutor: ${text}` }] }],
-              generationConfig: {
-                responseModalities: ['AUDIO'],
-                speechConfig: {
-                  voiceConfig: {
-                    prebuiltVoiceConfig: {
-                      voiceName: state.geminiVoice || 'Kore'
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), TTS_TIMEOUT_MS);
+          let res;
+          try {
+            res = await fetch(url, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                contents: [{ parts: [{ text: `Read the following English sentence aloud naturally as a friendly tutor: ${text}` }] }],
+                generationConfig: {
+                  responseModalities: ['AUDIO'],
+                  speechConfig: {
+                    voiceConfig: {
+                      prebuiltVoiceConfig: {
+                        voiceName: state.geminiVoice || 'Kore'
+                      }
                     }
                   }
                 }
-              }
-            })
-          });
+              }),
+              signal: controller.signal
+            });
+          } catch (fetchErr) {
+            lastStatus = `${ttsModel}: ${fetchErr.name === 'AbortError' ? 'timeout' : (fetchErr.message || 'network error')}`;
+            continue;
+          } finally {
+            clearTimeout(timeoutId);
+          }
           if (res.ok) {
             data = await res.json();
             break;
@@ -1210,6 +1223,7 @@
       function speakWithBrowserTTS(text) {
         if (!('speechSynthesis' in window)) {
           showToast('이 화면에서는 브라우저 음성이 지원되지 않습니다. 상단 Gemini API를 연결하면 고음질 AI 음성으로 바로 들으실 수 있어요.');
+          autoRestartListening();
           return;
         }
         try {
@@ -1249,6 +1263,7 @@
             state.isSpeaking = false;
             currentUtterance = null;
             updateCallHeader();
+            autoRestartListening();
           };
           utter.onerror = (ev) => {
             state.isSpeaking = false;
@@ -1273,6 +1288,7 @@
         } catch (e) {
           state.isSpeaking = false;
           updateCallHeader();
+          autoRestartListening();
         }
       }
 
@@ -1305,6 +1321,15 @@
       // --- STT (Speech Recognition) ---
       let recognition = null;
       const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+      // Hands-free: automatically reopen the mic after the tutor finishes speaking
+      // (or right after the reply renders, if auto-speak is off), so the user
+      // doesn't have to tap the mic button for every turn of the call.
+      function autoRestartListening() {
+        if (!state.inCall || state.isListening || state.isSpeaking || state.isLoading) return;
+        if (!SpeechRecognitionAPI) return;
+        startListening();
+      }
 
       function startListening() {
         if (!state.inCall) return;
@@ -1558,6 +1583,8 @@
 
         if (state.autoSpeak) {
           speakText(tutorMsg.en);
+        } else {
+          autoRestartListening();
         }
       }
 
@@ -1603,6 +1630,8 @@
         playChime();
         if (state.autoSpeak) {
           speakText(opening.en);
+        } else {
+          autoRestartListening();
         }
       }
 
