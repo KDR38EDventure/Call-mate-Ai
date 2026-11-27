@@ -1445,20 +1445,34 @@
 
         let data = null;
         let lastErr = '';
+        const REQUEST_TIMEOUT_MS = 15000;
         for (const modelName of candidateModels) {
           const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelName)}:generateContent?key=${encodeURIComponent(state.apiKey)}`;
-          const res = await fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              systemInstruction: { parts: [{ text: sysPrompt }] },
-              contents,
-              generationConfig: {
-                temperature: 0.75,
-                responseMimeType: 'application/json'
-              }
-            })
-          });
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+          let res;
+          try {
+            res = await fetch(url, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                systemInstruction: { parts: [{ text: sysPrompt }] },
+                contents,
+                generationConfig: {
+                  temperature: 0.75,
+                  responseMimeType: 'application/json'
+                }
+              }),
+              signal: controller.signal
+            });
+          } catch (fetchErr) {
+            lastErr = fetchErr.name === 'AbortError'
+              ? `요청 시간 초과(${REQUEST_TIMEOUT_MS / 1000}초) — 네트워크 상태를 확인해주세요.`
+              : (fetchErr.message || '네트워크 오류로 요청에 실패했습니다.');
+            continue;
+          } finally {
+            clearTimeout(timeoutId);
+          }
           if (res.ok) {
             data = await res.json();
             if (modelName !== state.model) {
